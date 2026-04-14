@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Task Manager</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #f4f7f6; 
+            color: #333; 
+            max-width: 800px; 
+            margin: 40px auto; 
+            padding: 20px; 
+        }
+        h1 { color: #2c3e50; text-align: center; }
+        .form-container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+            margin-bottom: 20px; 
+            display: flex; 
+            gap: 10px; 
+        }
+        input[type="text"] { 
+            flex: 1; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            font-size: 16px; 
+        }
+        button { 
+            padding: 10px 20px; 
+            background-color: #3498db; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            transition: background 0.3s; 
+        }
+        button:hover { background-color: #2980b9; }
+        ul { list-style-type: none; padding: 0; }
+        li { 
+            background: white; 
+            margin-bottom: 10px; 
+            padding: 15px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .task-content { flex: 1; }
+        .task-title { font-weight: bold; color: #2c3e50; font-size: 18px; margin-bottom: 5px; }
+        .task-desc { color: #7f8c8d; font-size: 14px; }
+        .delete-btn { background-color: #e74c3c; padding: 8px 15px; font-size: 14px; }
+        .delete-btn:hover { background-color: #c0392b; }
+        .error { color: red; text-align: center; margin-top: 10px; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+    <h1>🚀 DevOps Task Manager</h1>
+
+    <div class="form-container">
+        <input type="text" id="task-title" placeholder="Название задачи (например: Настроить CI/CD)" required>
+        <input type="text" id="task-desc" placeholder="Описание (опционально)">
+        <button onclick="addTask()">Добавить</button>
+    </div>
+    <div id="error-msg" class="error"></div>
+
+    <ul id="task-list">
+        </ul>
+
+    <script>
+        // Все запросы идут на /api/, и Nginx сам перенаправит их в бэкенд-контейнер
+        const API_URL = '/api/tasks';
+
+        // Функция для получения и отображения задач
+        async function fetchTasks() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error('Ошибка ответа сервера');
+                const tasks = await response.json();
+                
+                const list = document.getElementById('task-list');
+                list.innerHTML = '';
+                
+                if (tasks.length === 0) {
+                    list.innerHTML = '<li style="justify-content: center; color: #7f8c8d;">Нет активных задач. База данных пуста!</li>';
+                    return;
+                }
+
+                tasks.forEach(task => {
+                    list.innerHTML += `
+                        <li>
+                            <div class="task-content">
+                                <div class="task-title">${task.title}</div>
+                                <div class="task-desc">${task.description || 'Нет описания'}</div>
+                            </div>
+                            <button class="delete-btn" onclick="deleteTask(${task.id})">Удалить</button>
+                        </li>
+                    `;
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки задач:', error);
+                document.getElementById('error-msg').innerText = 'Не удалось связаться с Backend API. Проверьте логи Docker.';
+            }
+        }
+
+        // Функция добавления новой задачи
+        async function addTask() {
+            const titleInput = document.getElementById('task-title');
+            const descInput = document.getElementById('task-desc');
+            const errorMsg = document.getElementById('error-msg');
+            
+            const title = titleInput.value.trim();
+            const desc = descInput.value.trim();
+
+            if (!title) {
+                errorMsg.innerText = 'Название задачи не может быть пустым!';
+                return;
+            }
+            
+            errorMsg.innerText = ''; // Очищаем ошибку
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: title, description: desc })
+                });
+
+                if (response.ok) {
+                    titleInput.value = ''; // Очищаем форму
+                    descInput.value = '';
+                    fetchTasks(); // Обновляем список задач
+                } else {
+                    throw new Error('Ошибка при добавлении в БД');
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                errorMsg.innerText = 'Не удалось добавить задачу.';
+            }
+        }
+
+        // Функция удаления задачи
+        async function deleteTask(id) {
+            try {
+                const response = await fetch(`${API_URL}/${id}`, { 
+                    method: 'DELETE' 
+                });
+                
+                if (response.ok) {
+                    fetchTasks(); // Перерисовываем список
+                } else {
+                    throw new Error('Ошибка при удалении');
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Не удалось удалить задачу.');
+            }
+        }
+
+        // Вызываем загрузку задач при первом открытии страницы
+        window.onload = fetchTasks;
+    </script>
+</body>
+</html>
